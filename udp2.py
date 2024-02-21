@@ -63,7 +63,7 @@ def main(verbose=False):
                     print(f"Sent to UDP: {decoded_line}")
 
                 # Delay to prevent overwhelming the UDP server
-                time.sleep(0.1)
+                time.sleep(0.01)
 
     except KeyboardInterrupt:
         print("Program interrupted by the user.")
