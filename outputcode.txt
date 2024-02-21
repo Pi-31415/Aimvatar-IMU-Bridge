@@ -1,0 +1,2191 @@
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/SixDOFanimation.m
+```matlab
+function fig = SixDOFanimation(varargin)
+
+    %% Create local variables
+
+    % Required arguments
+    p = varargin{1};                % position of body
+    R = varargin{2};                % rotation matrix of body
+    [numSamples dummy] = size(p);
+
+    % Default values of optional arguments
+    SamplePlotFreq = 1;
+    Trail = 'Off';
+    LimitRatio = 1;
+    Position = [];
+    FullScreen = false;
+    View = [30 20];
+    AxisLength = 1;
+    ShowArrowHead = 'on';
+    Xlabel = 'X';
+    Ylabel = 'Y';
+    Zlabel = 'Z';
+    Title = '6DOF Animation';
+    ShowLegend = true;
+    CreateAVI = false;
+    AVIfileName = '6DOF Animation';
+    AVIfileNameEnum = true;
+    AVIfps = 30;
+
+    for i = 3:2:nargin
+        if  strcmp(varargin{i}, 'SamplePlotFreq'), SamplePlotFreq = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Trail')
+            Trail = varargin{i+1};
+            if(~strcmp(Trail, 'Off') && ~strcmp(Trail, 'DotsOnly') && ~strcmp(Trail, 'All'))
+                error('Invalid argument.  Trail must be ''Off'', ''DotsOnly'' or ''All''.');
+            end
+        elseif  strcmp(varargin{i}, 'LimitRatio'), LimitRatio = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Position'), Position = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'FullScreen'), FullScreen = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'View'), View = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'AxisLength'), AxisLength = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'ShowArrowHead'), ShowArrowHead = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Xlabel'), Xlabel = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Ylabel'), Ylabel = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Zlabel'), Zlabel = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'Title'), Title = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'ShowLegend'), ShowLegend = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'CreateAVI'), CreateAVI = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'AVIfileName'), AVIfileName = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'AVIfileNameEnum'), AVIfileNameEnum = varargin{i+1};
+        elseif  strcmp(varargin{i}, 'AVIfps'), AVIfps = varargin{i+1};
+        else error('Invalid argument.');
+        end
+    end;
+
+    %% Reduce data to samples to plot only
+
+    p = p(1:SamplePlotFreq:numSamples, :);
+    R = R(:, :, 1:SamplePlotFreq:numSamples) * AxisLength;
+    if(numel(View) > 2)
+        View = View(1:SamplePlotFreq:numSamples, :);
+    end
+    [numPlotSamples dummy] = size(p);
+
+    %% Setup AVI file
+
+    aviobj = [];                                                            	% create null object
+    if(CreateAVI)
+        fileName = strcat(AVIfileName, '.avi');
+        if(exist(fileName, 'file'))
+            if(AVIfileNameEnum)                                              	% if file name exists and enum enabled
+                i = 0;
+                while(exist(fileName, 'file'))                                  % find un-used file name by appending enum
+                    fileName = strcat(AVIfileName, sprintf('%i', i), '.avi');
+                    i = i + 1;
+                end
+            else                                                                % else file name exists and enum disabled
+                fileName = [];                                                  % file will not be created
+            end
+        end
+        if(isempty(fileName))
+            sprintf('AVI file not created as file already exists.')
+        else
+            aviobj = avifile(fileName, 'fps', AVIfps, 'compression', 'Cinepak', 'quality', 100);
+        end
+    end
+
+    %% Setup figure and plot
+
+    % Create figure
+    fig = figure('NumberTitle', 'off', 'Name', '6DOF Animation');
+    if(FullScreen)
+        screenSize = get(0, 'ScreenSize');
+        set(fig, 'Position', [0 0 screenSize(3) screenSize(4)]);
+    elseif(~isempty(Position))
+        set(fig, 'Position', Position);
+    end
+    set(gca, 'drawmode', 'fast');
+    lighting phong;
+    set(gcf, 'Renderer', 'zbuffer');
+    hold on;
+    axis equal;
+    grid on;
+    view(View(1, 1), View(1, 2));
+    title(i);
+    xlabel(Xlabel);
+    ylabel(Ylabel);
+    zlabel(Zlabel);
+
+    % Create plot data arrays
+    if(strcmp(Trail, 'DotsOnly') || strcmp(Trail, 'All'))
+        x = zeros(numPlotSamples, 1);
+        y = zeros(numPlotSamples, 1);
+        z = zeros(numPlotSamples, 1);
+    end
+    if(strcmp(Trail, 'All'))
+        ox = zeros(numPlotSamples, 1);
+        oy = zeros(numPlotSamples, 1);
+        oz = zeros(numPlotSamples, 1);
+        ux = zeros(numPlotSamples, 1);
+        vx = zeros(numPlotSamples, 1);
+        wx = zeros(numPlotSamples, 1);
+        uy = zeros(numPlotSamples, 1);
+        vy = zeros(numPlotSamples, 1);
+        wy = zeros(numPlotSamples, 1);
+        uz = zeros(numPlotSamples, 1);
+        vz = zeros(numPlotSamples, 1);
+        wz = zeros(numPlotSamples, 1);
+    end
+    x(1) = p(1,1);
+    y(1) = p(1,2);
+    z(1) = p(1,3);
+    ox(1) = x(1);
+    oy(1) = y(1);
+    oz(1) = z(1);
+    ux(1) = R(1,1,1:1);
+    vx(1) = R(2,1,1:1);
+    wx(1) = R(3,1,1:1);
+    uy(1) = R(1,2,1:1);
+    vy(1) = R(2,2,1:1);
+    wy(1) = R(3,2,1:1);
+    uz(1) = R(1,3,1:1);
+    vz(1) = R(2,3,1:1);
+    wz(1) = R(3,3,1:1);
+
+    % Create graphics handles
+    orgHandle = plot3(x, y, z, 'k.');
+    if(ShowArrowHead)
+        ShowArrowHeadStr = 'on';
+    else
+        ShowArrowHeadStr = 'off';
+    end
+    quivXhandle = quiver3(ox, oy, oz, ux, vx, wx,  'r', 'ShowArrowHead', ShowArrowHeadStr, 'MaxHeadSize', 0.999999, 'AutoScale', 'off');
+    quivYhandle = quiver3(ox, oy, oz, uy, vy, wy,  'g', 'ShowArrowHead', ShowArrowHeadStr, 'MaxHeadSize', 0.999999, 'AutoScale', 'off');
+    quivZhandle = quiver3(ox, ox, oz, uz, vz, wz,  'b', 'ShowArrowHead', ShowArrowHeadStr, 'MaxHeadSize', 0.999999, 'AutoScale', 'off');
+
+    % Create legend
+    if(ShowLegend)
+        legend('Origin', 'X', 'Y', 'Z');
+    end
+    
+    % Set initial limits
+    Xlim = [x(1)-AxisLength x(1)+AxisLength] * LimitRatio;
+    Ylim = [y(1)-AxisLength y(1)+AxisLength] * LimitRatio;
+    Zlim = [z(1)-AxisLength z(1)+AxisLength] * LimitRatio;
+    set(gca, 'Xlim', Xlim, 'Ylim', Ylim, 'Zlim', Zlim);
+    
+    % Set initial view
+    view(View(1, :));
+
+    %% Plot one sample at a time
+
+    for i = 1:numPlotSamples
+
+        % Update graph title
+        if(strcmp(Title, ''))
+            titleText = sprintf('Sample %i of %i', 1+((i-1)*SamplePlotFreq), numSamples);
+        else
+            titleText = strcat(Title, ' (', sprintf('Sample %i of %i', 1+((i-1)*SamplePlotFreq), numSamples), ')');
+        end
+        title(titleText);
+
+        % Plot body x y z axes
+        if(strcmp(Trail, 'DotsOnly') || strcmp(Trail, 'All'))
+            x(1:i) = p(1:i,1);
+            y(1:i) = p(1:i,2);
+            z(1:i) = p(1:i,3);
+        else
+            x = p(i,1);
+            y = p(i,2);
+            z = p(i,3);
+        end
+        if(strcmp(Trail, 'All'))
+            ox(1:i) = p(1:i,1);
+            oy(1:i) = p(1:i,2);
+            oz(1:i) = p(1:i,3);
+            ux(1:i) = R(1,1,1:i);
+            vx(1:i) = R(2,1,1:i);
+            wx(1:i) = R(3,1,1:i);
+            uy(1:i) = R(1,2,1:i);
+            vy(1:i) = R(2,2,1:i);
+            wy(1:i) = R(3,2,1:i);
+            uz(1:i) = R(1,3,1:i);
+            vz(1:i) = R(2,3,1:i);
+            wz(1:i) = R(3,3,1:i);
+        else
+            ox = p(i,1);
+            oy = p(i,2);
+            oz = p(i,3);
+            ux = R(1,1,i);
+            vx = R(2,1,i);
+            wx = R(3,1,i);
+            uy = R(1,2,i);
+            vy = R(2,2,i);
+            wy = R(3,2,i);
+            uz = R(1,3,i);
+            vz = R(2,3,i);
+            wz = R(3,3,i);
+        end
+        set(orgHandle, 'xdata', x, 'ydata', y, 'zdata', z);
+        set(quivXhandle, 'xdata', ox, 'ydata', oy, 'zdata', oz,'udata', ux, 'vdata', vx, 'wdata', wx);
+        set(quivYhandle, 'xdata', ox, 'ydata', oy, 'zdata', oz,'udata', uy, 'vdata', vy, 'wdata', wy);
+        set(quivZhandle, 'xdata', ox, 'ydata', oy, 'zdata', oz,'udata', uz, 'vdata', vz, 'wdata', wz);
+
+        % Adjust axes for snug fit and draw
+        axisLimChanged = false;
+        if((p(i,1) - AxisLength) < Xlim(1)), Xlim(1) = p(i,1) - LimitRatio*AxisLength; axisLimChanged = true; end
+        if((p(i,2) - AxisLength) < Ylim(1)), Ylim(1) = p(i,2) - LimitRatio*AxisLength; axisLimChanged = true; end
+        if((p(i,3) - AxisLength) < Zlim(1)), Zlim(1) = p(i,3) - LimitRatio*AxisLength; axisLimChanged = true; end
+        if((p(i,1) + AxisLength) > Xlim(2)), Xlim(2) = p(i,1) + LimitRatio*AxisLength; axisLimChanged = true; end
+        if((p(i,2) + AxisLength) > Ylim(2)), Ylim(2) = p(i,2) + LimitRatio*AxisLength; axisLimChanged = true; end
+        if((p(i,3) + AxisLength) > Zlim(2)), Zlim(2) = p(i,3) + LimitRatio*AxisLength; axisLimChanged = true; end
+        if(axisLimChanged), set(gca, 'Xlim', Xlim, 'Ylim', Ylim, 'Zlim', Zlim); end
+        drawnow;
+
+        % Adjust view
+        if(numel(View) > 2)
+            view(View(i, :));
+        end
+
+        % Add frame to AVI object
+        if(~isempty(aviobj))
+            frame = getframe(fig);
+            aviobj = addframe(aviobj, frame);
+        end
+
+    end
+
+    hold off;
+
+    % Close AVI file
+    if(~isempty(aviobj))
+        aviobj = close(aviobj);
+    end
+
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/Script.m
+```matlab
+%% Housekeeping
+ 
+addpath('ximu_matlab_library');	% include x-IMU MATLAB library
+addpath('quaternion_library');	% include quatenrion library
+close all;                     	% close all figures
+clear;                         	% clear all variables
+clc;                          	% clear the command terminal
+ 
+%% Import data
+
+xIMUdata = xIMUdataClass('LoggedData/LoggedData');
+
+samplePeriod = 1/256;
+
+gyr = [xIMUdata.CalInertialAndMagneticData.Gyroscope.X...
+       xIMUdata.CalInertialAndMagneticData.Gyroscope.Y...
+       xIMUdata.CalInertialAndMagneticData.Gyroscope.Z];        % gyroscope
+acc = [xIMUdata.CalInertialAndMagneticData.Accelerometer.X...
+       xIMUdata.CalInertialAndMagneticData.Accelerometer.Y...
+       xIMUdata.CalInertialAndMagneticData.Accelerometer.Z];	% accelerometer
+  
+% Plot
+figure('NumberTitle', 'off', 'Name', 'Gyroscope');
+hold on;
+plot(gyr(:,1), 'r');
+plot(gyr(:,2), 'g');
+plot(gyr(:,3), 'b');
+xlabel('sample');
+ylabel('dps');
+title('Gyroscope');
+legend('X', 'Y', 'Z');
+
+figure('NumberTitle', 'off', 'Name', 'Accelerometer');
+hold on;
+plot(acc(:,1), 'r');
+plot(acc(:,2), 'g');
+plot(acc(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('Accelerometer');
+legend('X', 'Y', 'Z');
+
+%% Process data through AHRS algorithm (calcualte orientation)
+% See: http://www.x-io.co.uk/open-source-imu-and-ahrs-algorithms/
+
+R = zeros(3,3,length(gyr));     % rotation matrix describing sensor relative to Earth
+
+ahrs = MahonyAHRS('SamplePeriod', samplePeriod, 'Kp', 1);
+
+for i = 1:length(gyr)
+    ahrs.UpdateIMU(gyr(i,:) * (pi/180), acc(i,:));	% gyroscope units must be radians
+    R(:,:,i) = quatern2rotMat(ahrs.Quaternion)';    % transpose because ahrs provides Earth relative to sensor
+end
+
+%% Calculate 'tilt-compensated' accelerometer
+
+tcAcc = zeros(size(acc));  % accelerometer in Earth frame
+
+for i = 1:length(acc)
+    tcAcc(i,:) = R(:,:,i) * acc(i,:)';
+end
+
+% Plot
+figure('NumberTitle', 'off', 'Name', '''Tilt-Compensated'' accelerometer');
+hold on;
+plot(tcAcc(:,1), 'r');
+plot(tcAcc(:,2), 'g');
+plot(tcAcc(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('''Tilt-compensated'' accelerometer');
+legend('X', 'Y', 'Z');
+
+%% Calculate linear acceleration in Earth frame (subtracting gravity)
+
+linAcc = tcAcc - [zeros(length(tcAcc), 1), zeros(length(tcAcc), 1), ones(length(tcAcc), 1)];
+linAcc = linAcc * 9.81;     % convert from 'g' to m/s/s
+
+% Plot
+figure('NumberTitle', 'off', 'Name', 'Linear Acceleration');
+hold on;
+plot(linAcc(:,1), 'r');
+plot(linAcc(:,2), 'g');
+plot(linAcc(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('Linear acceleration');
+legend('X', 'Y', 'Z');
+
+%% Calculate linear velocity (integrate acceleartion)
+
+linVel = zeros(size(linAcc));
+
+for i = 2:length(linAcc)
+    linVel(i,:) = linVel(i-1,:) + linAcc(i,:) * samplePeriod;
+end
+
+% Plot
+figure('NumberTitle', 'off', 'Name', 'Linear Velocity');
+hold on;
+plot(linVel(:,1), 'r');
+plot(linVel(:,2), 'g');
+plot(linVel(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('Linear velocity');
+legend('X', 'Y', 'Z');
+
+%% High-pass filter linear velocity to remove drift
+
+order = 1;
+filtCutOff = 0.1;
+[b, a] = butter(order, (2*filtCutOff)/(1/samplePeriod), 'high');
+linVelHP = filtfilt(b, a, linVel);
+
+% Plot
+figure('NumberTitle', 'off', 'Name', 'High-pass filtered Linear Velocity');
+hold on;
+plot(linVelHP(:,1), 'r');
+plot(linVelHP(:,2), 'g');
+plot(linVelHP(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('High-pass filtered linear velocity');
+legend('X', 'Y', 'Z');
+
+%% Calculate linear position (integrate velocity)
+
+linPos = zeros(size(linVelHP));
+
+for i = 2:length(linVelHP)
+    linPos(i,:) = linPos(i-1,:) + linVelHP(i,:) * samplePeriod;
+end
+
+% Plot
+figure('NumberTitle', 'off', 'Name', 'Linear Position');
+hold on;
+plot(linPos(:,1), 'r');
+plot(linPos(:,2), 'g');
+plot(linPos(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('Linear position');
+legend('X', 'Y', 'Z');
+
+%% High-pass filter linear position to remove drift
+
+order = 1;
+filtCutOff = 0.1;
+[b, a] = butter(order, (2*filtCutOff)/(1/samplePeriod), 'high');
+linPosHP = filtfilt(b, a, linPos);
+
+% Plot
+figure('NumberTitle', 'off', 'Name', 'High-pass filtered Linear Position');
+hold on;
+plot(linPosHP(:,1), 'r');
+plot(linPosHP(:,2), 'g');
+plot(linPosHP(:,3), 'b');
+xlabel('sample');
+ylabel('g');
+title('High-pass filtered linear position');
+legend('X', 'Y', 'Z');
+
+%% Play animation
+
+SamplePlotFreq = 8;
+
+SixDOFanimation(linPosHP, R, ...
+                'SamplePlotFreq', SamplePlotFreq, 'Trail', 'Off', ...
+                'Position', [9 39 1280 720], ...
+                'AxisLength', 0.1, 'ShowArrowHead', false, ...
+                'Xlabel', 'X (m)', 'Ylabel', 'Y (m)', 'Zlabel', 'Z (m)', 'ShowLegend', false, 'Title', 'Unfiltered',...
+                'CreateAVI', false, 'AVIfileNameEnum', false, 'AVIfps', ((1/samplePeriod) / SamplePlotFreq));            
+ 
+%% End of script
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/@MahonyAHRS/MahonyAHRS.m
+```matlab
+classdef MahonyAHRS < handle
+%MAYHONYAHRS Madgwick's implementation of Mayhony's AHRS algorithm
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#open_source_ahrs_and_imu_algorithms
+%
+%   Date          Author          Notes
+%   28/09/2011    SOH Madgwick    Initial release
+ 
+    %% Public properties
+    properties (Access = public)
+        SamplePeriod = 1/256;
+        Quaternion = [1 0 0 0];     % output quaternion describing the Earth relative to the sensor
+        Kp = 1;                     % algorithm proportional gain
+        Ki = 0;                     % algorithm integral gain
+    end
+    
+    %% Public properties
+    properties (Access = private)
+        eInt = [0 0 0];             % integral error
+    end    
+ 
+    %% Public methods
+    methods (Access = public)
+        function obj = MahonyAHRS(varargin)
+            for i = 1:2:nargin
+                if  strcmp(varargin{i}, 'SamplePeriod'), obj.SamplePeriod = varargin{i+1};
+                elseif  strcmp(varargin{i}, 'Quaternion'), obj.Quaternion = varargin{i+1};
+                elseif  strcmp(varargin{i}, 'Kp'), obj.Kp = varargin{i+1};
+                elseif  strcmp(varargin{i}, 'Ki'), obj.Ki = varargin{i+1};
+                else error('Invalid argument');
+                end
+            end;
+        end
+        function obj = Update(obj, Gyroscope, Accelerometer, Magnetometer)
+            q = obj.Quaternion; % short name local variable for readability
+ 
+            % Normalise accelerometer measurement
+            if(norm(Accelerometer) == 0), return; end   % handle NaN
+            Accelerometer = Accelerometer / norm(Accelerometer);    % normalise magnitude
+ 
+            % Normalise magnetometer measurement
+            if(norm(Magnetometer) == 0), return; end    % handle NaN
+            Magnetometer = Magnetometer / norm(Magnetometer);   % normalise magnitude
+ 
+            % Reference direction of Earth's magnetic feild
+            h = quaternProd(q, quaternProd([0 Magnetometer], quaternConj(q)));
+            b = [0 norm([h(2) h(3)]) 0 h(4)];
+            
+            % Estimated direction of gravity and magnetic field
+            v = [2*(q(2)*q(4) - q(1)*q(3))
+                 2*(q(1)*q(2) + q(3)*q(4))
+                 q(1)^2 - q(2)^2 - q(3)^2 + q(4)^2];
+            w = [2*b(2)*(0.5 - q(3)^2 - q(4)^2) + 2*b(4)*(q(2)*q(4) - q(1)*q(3))
+                 2*b(2)*(q(2)*q(3) - q(1)*q(4)) + 2*b(4)*(q(1)*q(2) + q(3)*q(4))
+                 2*b(2)*(q(1)*q(3) + q(2)*q(4)) + 2*b(4)*(0.5 - q(2)^2 - q(3)^2)]; 
+ 
+            % Error is sum of cross product between estimated direction and measured direction of fields
+            e = cross(Accelerometer, v) + cross(Magnetometer, w); 
+            if(obj.Ki > 0)
+                obj.eInt = obj.eInt + e * obj.SamplePeriod;   
+            else
+                obj.eInt = [0 0 0];
+            end
+            
+            % Apply feedback terms
+            Gyroscope = Gyroscope + obj.Kp * e + obj.Ki * obj.eInt;            
+            
+            % Compute rate of change of quaternion
+            qDot = 0.5 * quaternProd(q, [0 Gyroscope(1) Gyroscope(2) Gyroscope(3)]);
+ 
+            % Integrate to yield quaternion
+            q = q + qDot * obj.SamplePeriod;
+            obj.Quaternion = q / norm(q); % normalise quaternion
+        end
+        function obj = UpdateIMU(obj, Gyroscope, Accelerometer)
+            q = obj.Quaternion; % short name local variable for readability
+ 
+            % Normalise accelerometer measurement
+            if(norm(Accelerometer) == 0), return; end   % handle NaN
+            Accelerometer = Accelerometer / norm(Accelerometer);	% normalise magnitude
+ 
+            % Estimated direction of gravity and magnetic flux
+            v = [2*(q(2)*q(4) - q(1)*q(3))
+                 2*(q(1)*q(2) + q(3)*q(4))
+                 q(1)^2 - q(2)^2 - q(3)^2 + q(4)^2];
+ 
+            % Error is sum of cross product between estimated direction and measured direction of field
+            e = cross(Accelerometer, v); 
+            if(obj.Ki > 0)
+                obj.eInt = obj.eInt + e * obj.SamplePeriod;   
+            else
+                obj.eInt = [0 0 0];
+            end
+            
+            % Apply feedback terms
+            Gyroscope = Gyroscope + obj.Kp * e + obj.Ki * obj.eInt;            
+            
+            % Compute rate of change of quaternion
+            qDot = 0.5 * quaternProd(q, [0 Gyroscope(1) Gyroscope(2) Gyroscope(3)]);
+ 
+            % Integrate to yield quaternion
+            q = q + qDot * obj.SamplePeriod;
+            obj.Quaternion = q / norm(q); % normalise quaternion
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/ImportDirectory.m
+```matlab
+function xIMUdataStruct = ImportDirectory(directory)
+%IMPORTDIRECTORY Imports all x-IMU data CSV files within directory
+%
+%   xIMUdataStruct = ImportDirectory(directory)
+%
+%   Automatically imports x-IMU CSV files within specified directly.
+%   Imported data is returned as a structure of xIMUdataClass objects.  The
+%   name of each member will "ID_ABCD" where "ABCD" if the x-IMU device ID
+%   if available (i.e. if *_Registers.csv file present) or "FILE_00000"
+%   where "00000" is the file name prefix of the CSV files.
+
+    %% Import CSV files
+    listing = dir(strcat(directory, '\*_*.csv'));				% list all *_*.csv files in directory
+    fileNamePrefixes = unique(strtok({listing.name}, '_'));     % list unique file name prefixes (e.g. name_*.csv)
+    xIMUdataObjs = cell(length(fileNamePrefixes), 1);
+    for i = 1:length(fileNamePrefixes)
+        try xIMUdataObjs{i} = xIMUdataClass(strcat(directory, '\', fileNamePrefixes{i})); catch e, end
+    end
+    fileNamePrefixes(cellfun(@isempty,xIMUdataObjs)) = [];      % remove failures from lists
+    xIMUdataObjs(cellfun(@isempty,xIMUdataObjs)) = [];
+    if(numel(xIMUdataObjs) == 0)
+        error('No data was imported.');
+    end
+
+    %% Organise data in structure
+    fieldNames = cell(numel(xIMUdataObjs), 1);
+    try                                                         % try using device IDs as structure field names
+        for i = 1:numel(xIMUdataObjs)
+            fieldNames{i} = strcat('ID_', dec2hex(xIMUdataObjs{i}.RegisterData.GetValueAtAddress(2)));
+        end
+        xIMUdataStruct = orderfields(cell2struct(xIMUdataObjs, fieldNames, 1));
+    catch e                                                     % otherwise use file name prefix (alpha-numeric characters only)
+        for i = 1:numel(xIMUdataObjs)
+            fieldNames{i} = strcat('FILE_', fileNamePrefixes{i}(isstrprop(fileNamePrefixes{i}, 'alphanum')));
+        end
+        xIMUdataStruct = orderfields(cell2struct(xIMUdataObjs, fieldNames, 1));
+    end
+end
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/DataBaseClass.m
+```matlab
+classdef DataBaseClass < handle
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        NumPackets = 0;
+        PacketNumber = [];
+    end
+
+    %% Protected methods
+    methods (Access = protected)
+        function data = ImportCSVnumeric(obj, fileNamePrefix)
+            data = dlmread(obj.CreateFileName(fileNamePrefix), ',', 1, 0);
+            obj.PacketNumber = data(:,1);
+            obj.NumPackets = length(obj.PacketNumber);
+        end
+        function data = ImportCSVmixed(obj, fileNamePrefix, fieldSpecifier)
+            fid = fopen(obj.CreateFileName(fileNamePrefix));
+            fgets(fid);     % disregard column headings
+            data = textscan(fid, fieldSpecifier, 'Delimiter', ',');
+            fclose(fid);
+            obj.PacketNumber = data{1};
+            obj.NumPackets = length(obj.PacketNumber);
+        end
+        function figName = CreateFigName(obj)
+            [pathstr, name , ext, versn] = fileparts(obj.FileNameAppendage);
+            figName = name(2:end);
+        end
+    end
+
+    %% Private methods
+    methods (Access = private)
+        function fileName = CreateFileName(obj, fileNamePrefix)
+            fileName = strcat(fileNamePrefix, obj.FileNameAppendage);
+            if(~exist(fileName, 'file'))
+                error('File not found. No data was imported.');
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/InertialAndMagneticDataBaseClass.m
+```matlab
+classdef InertialAndMagneticDataBaseClass < TimeSeriesDataBaseClass
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        Gyroscope = struct('X', [], 'Y', [], 'Z', []);
+        Accelerometer = struct('X', [], 'Y', [], 'Z', []);
+        Magnetometer = struct('X', [], 'Y', [], 'Z', []);
+    end
+
+    %% Abstract protected properties
+    properties (Access = protected)
+        GyroscopeUnits;
+        AccelerometerUnits;
+        MagnetometerUnits;
+    end
+
+    %% Protected methods
+    methods (Access = protected)
+        function obj = Import(obj, fileNamePrefix)
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Gyroscope.X = data(:,2);
+            obj.Gyroscope.Y = data(:,3);
+            obj.Gyroscope.Z = data(:,4);
+            obj.Accelerometer.X = data(:,5);
+            obj.Accelerometer.Y = data(:,6);
+            obj.Accelerometer.Z = data(:,7);
+            obj.Magnetometer.X = data(:,8);
+            obj.Magnetometer.Y = data(:,9);
+            obj.Magnetometer.Z = data(:,10);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                ax(1) = subplot(3,1,1);
+                hold on;
+                plot(time, obj.Gyroscope.X, 'r');
+                plot(time, obj.Gyroscope.Y, 'g');
+                plot(time, obj.Gyroscope.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Angular rate (', obj.GyroscopeUnits, ')'));
+                title('Gyroscope');
+                hold off;
+                ax(2) = subplot(3,1,2);
+                hold on;
+                plot(time, obj.Accelerometer.X, 'r');
+                plot(time, obj.Accelerometer.Y, 'g');
+                plot(time, obj.Accelerometer.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Acceleration (', obj.AccelerometerUnits, ')'));
+                title('Accelerometer');
+                hold off;
+                ax(3) = subplot(3,1,3);
+                hold on;
+                plot(time, obj.Magnetometer.X, 'r');
+                plot(time, obj.Magnetometer.Y, 'g');
+                plot(time, obj.Magnetometer.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Flux (', obj.MagnetometerUnits, ')'));
+                title('Magnetometer');
+                hold off;
+                linkaxes(ax,'x');
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/AnalogueInputDataBaseClass.m
+```matlab
+classdef AnalogueInputDataBaseClass < TimeSeriesDataBaseClass
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        AX0 = [];
+        AX1 = [];
+        AX2 = [];
+        AX3 = [];
+        AX4 = [];
+        AX5 = [];
+        AX6 = [];
+        AX7 = [];
+    end
+
+    %% Abstract protected properties
+    properties (Access = protected)
+        ADCunits;
+    end
+
+    %% Protected methods
+    methods (Access = protected)
+        function obj = Import(obj, fileNamePrefix)
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.AX0 = data(:,2);
+            obj.AX1 = data(:,3);
+            obj.AX2 = data(:,4);
+            obj.AX3 = data(:,5);
+            obj.AX4 = data(:,6);
+            obj.AX5 = data(:,7);
+            obj.AX6 = data(:,8);
+            obj.AX7 = data(:,9);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                hold on;
+                plot(time, obj.AX0, 'r');
+                plot(time, obj.AX1, 'g');
+                plot(time, obj.AX2, 'b');
+                plot(time, obj.AX3, 'k');
+                plot(time, obj.AX4, ':r');
+                plot(time, obj.AX5, ':g');
+                plot(time, obj.AX6, ':b');
+                plot(time, obj.AX7, ':k');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Voltage (', obj.ADCunits, ')'));
+                title('Analogue Input');
+                hold off;
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/PWMoutputDataClass.m
+```matlab
+classdef PWMoutputDataClass < DataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_PWMoutput.csv';
+        AX0 = [];
+        AX2 = [];
+        AX4 = [];
+        AX6 = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = PWMoutputDataClass(fileNamePrefix)
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.AX0 = data(:,2);
+            obj.AX2 = data(:,3);
+            obj.AX4 = data(:,4);
+            obj.AX6 = data(:,5);
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/CalBatteryAndThermometerDataClass.m
+```matlab
+classdef CalBatteryAndThermometerDataClass < BatteryAndThermometerDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_CalBattAndTherm.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = CalBatteryAndThermometerDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.ThermometerUnits = '^\circC';
+            obj.BatteryUnits = 'G';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/EulerAnglesDataClass.m
+```matlab
+classdef EulerAnglesDataClass < TimeSeriesDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_EulerAngles.csv';
+        Phi = [];
+        Theta = [];
+        Psi = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = EulerAnglesDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Phi = data(:,2);
+            obj.Theta = data(:,3);
+            obj.Psi = data(:,4);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                hold on;
+                plot(time, obj.Phi, 'r');
+                plot(time, obj.Theta, 'g');
+                plot(time, obj.Psi, 'b');
+                title('Euler angles');
+                xlabel(obj.TimeAxis);
+                ylabel('Angle (degrees)');
+                legend('\phi', '\theta', '\psi');
+                hold off;
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RotationMatrixDataClass.m
+```matlab
+classdef RotationMatrixDataClass < TimeSeriesDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_RotationMatrix.csv';
+        RotationMatrix = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RotationMatrixDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.RotationMatrix = zeros(3, 3, obj.NumPackets);
+            obj.RotationMatrix(1,1,:) = data(:,2);
+            obj.RotationMatrix(1,2,:) = data(:,3);
+            obj.RotationMatrix(1,3,:) = data(:,4);
+            obj.RotationMatrix(2,1,:) = data(:,5);
+            obj.RotationMatrix(2,2,:) = data(:,6);
+            obj.RotationMatrix(2,3,:) = data(:,7);
+            obj.RotationMatrix(3,1,:) = data(:,8);
+            obj.RotationMatrix(3,2,:) = data(:,9);
+            obj.RotationMatrix(3,3,:) = data(:,10);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+        function obj = Plot(obj)
+            error('This method is unimplemented.');
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RawInertialAndMagneticDataClass.m
+```matlab
+classdef RawInertialAndMagneticDataClass < InertialAndMagneticDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_RawInertialAndMag.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RawInertialAndMagneticDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.GyroscopeUnits = 'lsb';
+            obj.AccelerometerUnits = 'lsb';
+            obj.MagnetometerUnits = 'lsb';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/TimeSeriesDataBaseClass.m
+```matlab
+classdef TimeSeriesDataBaseClass < DataBaseClass
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        Time = [];
+        SamplePeriod = 0;
+    end
+
+    %% Public properties
+    properties (Access = public)
+        SampleRate = 0;
+        StartTime = 0;
+    end
+
+    %% Protected properties
+    properties (Access = protected)
+        TimeAxis;
+    end
+
+    %% Abstract public methods
+    methods (Abstract, Access = public)
+        Plot(obj);
+    end
+
+    %% Get/set methods
+    methods
+        function obj = set.SampleRate(obj, sampleRate)
+            obj.SampleRate = sampleRate;
+            if(obj.SampleRate == 0)
+                obj.Time = [];
+                obj.TimeAxis = 'Sample';
+            elseif(obj.NumPackets ~= 0)
+                obj.Time = (0:obj.NumPackets-1)' * (1/obj.SampleRate) + obj.StartTime;
+                obj.TimeAxis = 'Time (s)';
+            end
+        end
+        function obj = set.StartTime(obj, startTime)
+            obj.StartTime = startTime;
+            obj.SampleRate = obj.SampleRate;
+        end
+        function samplePeriod = get.SamplePeriod(obj)
+            if(obj.SampleRate == 0)
+                samplePeriod = 0;
+            else
+                samplePeriod = 1 / obj.SampleRate;
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/CalAnalogueInputDataClass.m
+```matlab
+classdef CalAnalogueInputDataClass < AnalogueInputDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_CalAnalogueInput.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = CalAnalogueInputDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.ADCunits = 'V';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/xIMUdataClass.m
+```matlab
+classdef xIMUdataClass < handle
+
+    %% Public properties
+    properties (SetAccess = private)
+        FileNamePrefix = '';
+        ErrorData = [];
+        CommandData = [];
+        RegisterData = [];
+        DateTimeData = [];
+        RawBatteryAndThermometerData = [];
+        CalBatteryAndThermometerData = [];
+        RawInertialAndMagneticData = [];
+        CalInertialAndMagneticData = [];
+        QuaternionData = [];
+        RotationMatrixData = [];
+        EulerAnglesData = [];
+        DigitalIOdata = [];
+        RawAnalogueInputData = [];
+        CalAnalogueInputData = [];
+        PWMoutputData = [];
+        RawADXL345busData = [];
+        CalADXL345busData = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = xIMUdataClass(varargin)
+            % Create data objects from files
+            obj.FileNamePrefix = varargin{1};
+            dataImported = false;
+            try obj.ErrorData = ErrorDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.CommandData = CommandDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RegisterData = RegisterDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.DateTimeData = DateTimeDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RawBatteryAndThermometerData = RawBatteryAndThermometerDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.CalBatteryAndThermometerData = CalBatteryAndThermometerDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RawInertialAndMagneticData = RawInertialAndMagneticDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.CalInertialAndMagneticData = CalInertialAndMagneticDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.QuaternionData = QuaternionDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.EulerAnglesData = EulerAnglesDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RotationMatrixData = RotationMatrixDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.DigitalIOdata = DigitalIOdataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RawAnalogueInputData = RawAnalogueInputDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.CalAnalogueInputData = CalAnalogueInputDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.PWMoutputData = PWMoutputDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.RawADXL345busData = RawADXL345busDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            try obj.CalADXL345busData = CalADXL345busDataClass(obj.FileNamePrefix); dataImported = true; catch e, end
+            if(~dataImported)
+                error('No data was imported.');
+            end
+
+            % Apply SampleRate from register data
+            try h = obj.DateTimeData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(67)); catch e, end
+            try h = obj.RawBatteryAndThermometerData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(68)); catch e, end
+            try h = obj.CalBatteryAndThermometerData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(68)); catch e, end
+            try h = obj.RawInertialAndMagneticData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(69)); catch e, end
+            try h = obj.CalInertialAndMagneticData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(69)); catch e, end
+            try h = obj.QuaternionData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(70)); catch e, end
+            try h = obj.RotationMatrixData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(70)); catch e, end
+            try h = obj.EulerAnglesData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(70)); catch e, end
+            try h = obj.DigitalIOdata; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(78)); catch e, end
+            try h = obj.RawAnalogueInputData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(80)); catch e, end
+            try h = obj.CalAnalogueInputData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(80)); catch e, end
+            try h = obj.RawADXL345busData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(85)); catch e, end
+            try h = obj.CalADXL345busData; h.SampleRate = obj.SampleRateFromRegValue(obj.RegisterData.GetValueAtAddress(85)); catch e, end
+
+            % Apply SampleRate if specified as argument
+            for i = 2:2:(nargin)
+                if strcmp(varargin{i}, 'DateTimeSampleRate')
+                    try h = obj.DateTimeData; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'BattThermSampleRate')
+                    try h = obj.RawBatteryAndThermometerData; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.CalBatteryAndThermometerData; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'InertialMagneticSampleRate')
+                    try h = obj.RawInertialAndMagneticData; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.CalInertialAndMagneticData; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'QuaternionSampleRate')
+                    try h = obj.QuaternionData; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.RotationMatrixData.SampleRate; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.EulerAnglesData; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'DigitalIOSampleRate')
+                    try h = obj.DigitalIOdata; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'AnalogueInputSampleRate')
+                    try h = obj.RawAnalogueInputData; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.CalAnalogueInputData; h.SampleRate = varargin{i+1}; catch e, end
+                elseif strcmp(varargin{i}, 'ADXL345SampleRate')
+                    try h = obj.RawADXL345busData; h.SampleRate = varargin{i+1}; catch e, end
+                    try h = obj.CalADXL345busData; h.SampleRate = varargin{i+1}; catch e, end
+                else
+                    error('Invalid argument.');
+                end
+            end
+        end
+        function obj = Plot(obj)
+            try obj.RawBatteryAndThermometerData.Plot(); catch e, end
+            try obj.CalBatteryAndThermometerData.Plot(); catch e, end
+            try obj.RawInertialAndMagneticData.Plot(); catch e, end
+            try obj.CalInertialAndMagneticData.Plot(); catch e, end
+            try obj.QuaternionData.Plot(); catch e, end
+            try obj.EulerAnglesData.Plot(); catch e, end
+            try obj.RotationMatrixDataClass.Plot(); catch e, end
+            try obj.DigitalIOdata.Plot(); catch e, end
+            try obj.RawAnalogueInputData.Plot(); catch e, end
+            try obj.CalAnalogueInputData.Plot(); catch e, end
+            try obj.RawADXL345busData.Plot(); catch e, end
+            try obj.CalADXL345busData.Plot(); catch e, end
+        end
+    end
+
+    %% Private methods
+    methods (Access = private)
+        function sampleRate = SampleRateFromRegValue(obj, value)
+            sampleRate = floor(2^(value-1));
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/CalADXL345busDataClass.m
+```matlab
+classdef CalADXL345busDataClass < ADXL345busDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_CalADXL345bus.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = CalADXL345busDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.AccelerometerUnits = 'g';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RawADXL345busDataClass.m
+```matlab
+classdef RawADXL345busDataClass < ADXL345busDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_RawADXL345bus.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RawADXL345busDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.AccelerometerUnits = 'g';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RawBatteryAndThermometerDataClass.m
+```matlab
+classdef RawBatteryAndThermometerDataClass < BatteryAndThermometerDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_RawBattAndTherm.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RawBatteryAndThermometerDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.ThermometerUnits = 'lsb';
+            obj.BatteryUnits = 'lsb';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/ADXL345busDataBaseClass.m
+```matlab
+classdef ADXL345busDataBaseClass < TimeSeriesDataBaseClass
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        ADXL345A = struct('X', [], 'Y', [], 'Z', []);
+        ADXL345B = struct('X', [], 'Y', [], 'Z', []);
+        ADXL345C = struct('X', [], 'Y', [], 'Z', []);
+        ADXL345D = struct('X', [], 'Y', [], 'Z', []);
+    end
+
+    %% Abstract protected properties
+    properties (Access = protected)
+        AccelerometerUnits;
+    end
+
+    %% Protected methods
+    methods (Access = protected)
+        function obj = Import(obj, fileNamePrefix)
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.ADXL345A.X = data(:,2);
+            obj.ADXL345A.Y = data(:,3);
+            obj.ADXL345A.Z = data(:,4);
+            obj.ADXL345B.X = data(:,5);
+            obj.ADXL345B.Y = data(:,6);
+            obj.ADXL345B.Z = data(:,7);
+            obj.ADXL345C.X = data(:,8);
+            obj.ADXL345C.Y = data(:,9);
+            obj.ADXL345C.Z = data(:,10);
+            obj.ADXL345D.X = data(:,11);
+            obj.ADXL345D.Y = data(:,12);
+            obj.ADXL345D.Z = data(:,13);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                ax(1) = subplot(4,1,1);
+                hold on;
+                plot(time, obj.ADXL345A.X, 'r');
+                plot(time, obj.ADXL345A.Y, 'g');
+                plot(time, obj.ADXL345A.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Acceleration (', obj.AccelerometerUnits, ')'));
+                title('ADXL345 A');
+                hold off;
+                ax(2) = subplot(4,1,2);
+                hold on;
+                plot(time, obj.ADXL345B.X, 'r');
+                plot(time, obj.ADXL345B.Y, 'g');
+                plot(time, obj.ADXL345B.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Acceleration (', obj.AccelerometerUnits, ')'));
+                title('ADXL345 B');
+                hold off;
+                ax(3) = subplot(4,1,3);
+                hold on;
+                plot(time, obj.ADXL345C.X, 'r');
+                plot(time, obj.ADXL345C.Y, 'g');
+                plot(time, obj.ADXL345C.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Acceleration (', obj.AccelerometerUnits, ')'));
+                title('ADXL345 C');
+                hold off;
+                ax(4) = subplot(4,1,4);
+                hold on;
+                plot(time, obj.ADXL345D.X, 'r');
+                plot(time, obj.ADXL345D.Y, 'g');
+                plot(time, obj.ADXL345D.Z, 'b');
+                legend('X', 'Y', 'Z');
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Acceleration (', obj.AccelerometerUnits, ')'));
+                title('ADXL345 D');
+                hold off;
+                linkaxes(ax,'x');
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/CommandDataClass.m
+```matlab
+classdef CommandDataClass < DataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_Commands.csv';
+        Code = [];
+        Message = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = CommandDataClass(fileNamePrefix)
+            data = obj.ImportCSVmixed(fileNamePrefix, '%f %f %s');
+            obj.Code = data{2};
+            obj.Message = data{3};
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RawAnalogueInputDataClass.m
+```matlab
+classdef RawAnalogueInputDataClass < AnalogueInputDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_RawAnalogueInput.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RawAnalogueInputDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.ADCunits = 'lsb';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/DateTimeDataClass.m
+```matlab
+classdef DateTimeDataClass < TimeSeriesDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_DateTime.csv';
+        String = [];
+        Vector = [];
+        Serial = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = DateTimeDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Vector = data(:,2:7);
+            obj.String = cellstr(datestr(obj.Vector));
+            obj.Serial = datenum(obj.Vector);
+            obj.SampleRate = obj.SampleRate;	% call set method to create time vector
+        end
+        function obj = Plot(obj)
+            error('This method is unimplemented.');
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/RegisterDataClass.m
+```matlab
+classdef RegisterDataClass < DataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_Registers.csv';
+        Address = [];
+        Value = [];
+        FloatValue = [];
+        Name = {};
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = RegisterDataClass(fileNamePrefix)
+            data = obj.ImportCSVmixed(fileNamePrefix, '%f %f %f %f %s');
+            obj.Address = data{2};
+            obj.Value = data{3};
+            obj.FloatValue = data{4};
+            obj.Name = data{5};
+        end
+        function value = GetValueAtAddress(obj, address)
+            value = obj.ValueAtIndexes(obj.IndexesOfAddress(address));
+        end
+        function floatValue = GetFloatValueAtAddress(obj, address)
+            floatValue = obj.FloatValueAtIndexes(obj.IndexesOfAddress(address));
+        end
+        function value = GetValueAtName(obj, name)
+            value = obj.ValueAtIndexes(obj.IndexesOfName(name));
+        end
+        function floatValue = GetFloatValueAtName(obj, name)
+            floatValue = obj.FloatValueAtIndexes(obj.IndexesOfName(name));
+        end
+    end
+
+    %% Private methods
+    methods (Access = private)
+        function indexes = IndexesOfAddress(obj, address)
+            indexes = find(obj.Address == address);
+            if(isempty(indexes))
+                error('Register address not found.');
+            end
+        end
+        function indexes = IndexesOfName(obj, name)
+            indexes = find(ismember(obj.Name, name));
+            if(isempty(indexes))
+                error('Register name not found.');
+            end
+        end
+        function value = ValueAtIndexes(obj, indexes)
+            if(numel(unique(obj.Value(indexes))) > 1)
+                error('Conflicting register values exist.');
+            end
+            value = obj.Value(indexes(1));
+        end
+        function floatValue = FloatValueAtIndexes(obj, indexes)
+            if(numel(unique(obj.FloatValue(indexes))) > 1)
+                error('Conflicting register values exist.');
+            end
+            floatValue = obj.FloatValue(indexes(1));
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/DigitalIOdataClass.m
+```matlab
+classdef DigitalIOdataClass < TimeSeriesDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_DigitalIO.csv';
+        Direction = struct('AX0', [], 'AX1', [], 'AX2', [], 'AX3', [], 'AX4', [], 'AX5', [], 'AX6', [], 'AX7', []);
+        State = struct('AX0', [], 'AX1', [], 'AX2', [], 'AX3', [], 'AX4', [], 'AX5', [], 'AX6', [], 'AX7', []);
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = DigitalIOdataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Direction.AX0 = data(:,2);
+            obj.Direction.AX1  = data(:,3);
+            obj.Direction.AX2  = data(:,4);
+            obj.Direction.AX3  = data(:,5);
+            obj.Direction.AX4  = data(:,6);
+            obj.Direction.AX5  = data(:,7);
+            obj.Direction.AX6  = data(:,8);
+            obj.Direction.AX7  = data(:,9);
+            obj.State.AX0 = data(:,10);
+            obj.State.AX1  = data(:,11);
+            obj.State.AX2  = data(:,12);
+            obj.State.AX3  = data(:,13);
+            obj.State.AX4  = data(:,14);
+            obj.State.AX5  = data(:,15);
+            obj.State.AX6  = data(:,16);
+            obj.State.AX7  = data(:,17);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                hold on;
+                plot(time, obj.State.AX0, 'r');
+                plot(time, obj.State.AX1, 'g');
+                plot(time, obj.State.AX2, 'b');
+                plot(time, obj.State.AX3, 'k');
+                plot(time, obj.State.AX4, ':r');
+                plot(time, obj.State.AX5, ':g');
+                plot(time, obj.State.AX6, ':b');
+                plot(time, obj.State.AX7, ':k');
+                title('Digital I/O');
+                xlabel(obj.TimeAxis);
+                ylabel('State (Binary)');
+                legend('AX0', 'AX1', 'AX2', 'AX3', 'AX4', 'AX5', 'AX6', 'AX7');
+                hold off;
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/QuaternionDataClass.m
+```matlab
+classdef QuaternionDataClass < TimeSeriesDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_Quaternion.csv';
+        Quaternion = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = QuaternionDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Quaternion = data(:,2:5);
+            obj.SampleRate = obj.SampleRate;	% call set method to create time vector
+        end
+        function obj = Plot(obj)
+            error('This method is unimplemented.');
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/BatteryAndThermometerDataBaseClass.m
+```matlab
+classdef BatteryAndThermometerDataBaseClass < TimeSeriesDataBaseClass
+
+    %% Abstract public 'read-only' properties
+    properties (Abstract, SetAccess = private)
+        FileNameAppendage;
+    end
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        Battery = [];
+        Thermometer = [];
+    end
+
+    %% Abstract protected properties
+    properties (Access = protected)
+        ThermometerUnits;
+        BatteryUnits;
+    end
+
+    %% Protected methods
+    methods (Access = protected)
+        function obj = Import(obj, fileNamePrefix)
+            data = obj.ImportCSVnumeric(fileNamePrefix);
+            obj.Battery = data(:,2);
+            obj.Thermometer = data(:,3);
+            obj.SampleRate = obj.SampleRate;    % call set method to create time vector
+        end
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function fig = Plot(obj)
+            if(obj.NumPackets == 0)
+                error('No data to plot.');
+            else
+                if(isempty(obj.Time))
+                    time = 1:obj.NumPackets;
+                else
+                    time = obj.Time;
+                end
+                fig = figure('Name', obj.CreateFigName());
+                ax(1) = subplot(2,1,1);
+                hold on;
+                plot(time, obj.Battery);
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Voltage (', obj.BatteryUnits, ')'));
+                title('Battery Voltmeter');
+                hold off;
+                ax(2) = subplot(2,1,2);
+                hold on;
+                plot(time, obj.Thermometer);
+                xlabel(obj.TimeAxis);
+                ylabel(strcat('Temperature (', obj.ThermometerUnits, ')'));
+                title('Thermometer');
+                hold off;
+                linkaxes(ax,'x');
+            end
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/SyncroniseData.m
+```matlab
+function SyncroniseData(varargin)
+%SYNCRONISEDATA Syncronises time series data between xIMUdataClass objects
+%
+%   SyncroniseData(xIMUdataStruct, StartEventTimes)
+%   SyncroniseData(xIMUdataStruct, StartEventTimes, EndEventTimes)
+%   SyncroniseData(xIMUdataStruct, 'UseAX0fallingEdge')
+%
+%   This fuction syncronises time series data between xIMUdataClass objects
+%   by adjusting the StartTime and SampleRate properties of each data
+%   class.
+%
+%   StartEventTimes is vector of values representing the time at which a
+%   'start synchronisation event' common to all xIMUdataClass objects is
+%   known to occur within each xIMUdataClass object's time series data. The
+%   length of this vector must equal the number of xIMUdataClass objects
+%   in xIMUdataStruct.
+%
+%   EndEventTimes is vector of values representing the time at which a
+%   'end synchronisation event' common to all xIMUdataClass objects is
+%   known to occur within each xIMUdataClass object's time series data. The
+%   length of this vector must equal the number of xIMUdataClass objects
+%   in xIMUdataStruct.
+%
+%   'UseAX0fallingEdge' should be specified if a falling edge of the
+%   auxilary port (configured in digital I/O mode) channel AX0 represents
+%   the 'start synchronisation event' or 'start synchronisation event' and
+%   'end synchronisation event'.
+
+    %% Apply arguments
+    xIMUdata = varargin{1};
+    xIMUdataObjs = struct2cell(xIMUdata);
+    StartEventTimes = [];
+    EndEventTimes = [];
+    UseAX0fallingEdge = false;
+    if(ischar(varargin{2}))
+        if strcmp(varargin{2}, 'UseAX0fallingEdge'), UseAX0fallingEdge = true;
+        else error('Invalid argument.');
+        end
+    else
+        StartEventTimes = varargin{2};
+        if(nargin == 3)
+            EndEventTimes = varargin{3};
+        end
+    end
+
+    %% Use AX0 falling edge of auxiliary port in Digital I/O mode
+    if(UseAX0fallingEdge)
+        for i = 1:numel(xIMUdataObjs)
+            fallingEdgeIndexes = [0; diff(xIMUdataObjs{i}.DigitalIOdata.State.AX0)] == -1;
+            fallingEdgeTimes = xIMUdataObjs{i}.DigitalIOdata.Time(fallingEdgeIndexes);
+            StartEventTimes = [StartEventTimes; fallingEdgeTimes(1)];
+            if(numel(fallingEdgeTimes) > 1)
+                EndEventTimes = [EndEventTimes; fallingEdgeTimes(end)];
+            end
+        end
+    end
+
+    %% Modify start times to synchronise start of window
+    if(numel(StartEventTimes) ~= numel(xIMUdataObjs))
+        error('Length of StartEventTimes vector must equal number of xIMUdataClass objects');
+    end
+    for i = 1:numel(xIMUdataObjs)
+        try h = xIMUdataObjs{i}.DateTimeData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.RawBatteryAndThermometerData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.CalBatteryAndThermometerData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.RawInertialAndMagneticData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.CalInertialAndMagneticData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.QuaternionData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.RotationMatrixData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.EulerAnglesData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.DigitalIOdata; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.RawAnalogueInputData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.CalAnalogueInputData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.RawADXL345busData; h.StartTime = -StartEventTimes(i); catch e, end
+        try h = xIMUdataObjs{i}.CalADXL345busData; h.StartTime = -StartEventTimes(i); catch e, end
+    end
+
+    %% Modify sample rate to synchronise end of window
+    if(numel(EndEventTimes) == 0)
+        return;
+    end
+    if(numel(EndEventTimes) ~= numel(xIMUdataObjs))
+        error('Length of EndEventTimes vector must equal number of xIMUdataClass objects');
+    end
+    scalers = (EndEventTimes - StartEventTimes) * (1/((EndEventTimes(1)-StartEventTimes(1))));
+    for i = 2:numel(xIMUdataObjs)
+        try h = xIMUdataObjs{i}.DateTimeData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.RawBatteryAndThermometerData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.CalBatteryAndThermometerData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.RawInertialAndMagneticData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.CalInertialAndMagneticData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = -StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.QuaternionData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.RotationMatrixData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.EulerAnglesData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.DigitalIOdata; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.RawAnalogueInputData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.CalAnalogueInputData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.RawADXL345busData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+        try h = xIMUdataObjs{i}.CalADXL345busData; h.SampleRate = scalers(i)*h.SampleRate; h.StartTime = StartEventTimes(i)/scalers(i); catch e, end
+    end
+end
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/ErrorDataClass.m
+```matlab
+classdef ErrorDataClass < DataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_Errors.csv';
+        Code = [];
+        Message = [];
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = ErrorDataClass(fileNamePrefix)
+            data = obj.ImportCSVmixed(fileNamePrefix, '%f %f %s');
+            obj.Code = data{2};
+            obj.Message = data{3};
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/ximu_matlab_library/CalInertialAndMagneticDataClass.m
+```matlab
+classdef CalInertialAndMagneticDataClass < InertialAndMagneticDataBaseClass
+
+    %% Public 'read-only' properties
+    properties (SetAccess = private)
+        FileNameAppendage = '_CalInertialAndMag.csv';
+    end
+
+    %% Public methods
+    methods (Access = public)
+        function obj = CalInertialAndMagneticDataClass(varargin)
+            fileNamePrefix = varargin{1};
+            for i = 2:2:nargin
+                if  strcmp(varargin{i}, 'SampleRate'), obj.SampleRate = varargin{i+1};
+                else error('Invalid argument.');
+                end
+            end
+            obj.Import(fileNamePrefix);
+
+            % Set protected parent class variables
+            obj.GyroscopeUnits = '^\circ/s';
+            obj.AccelerometerUnits = 'g';
+            obj.MagnetometerUnits = 'G';
+        end
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/quaternProd.m
+```matlab
+function ab = quaternProd(a, b)
+%QUATERNPROD Calculates the quaternion product
+%
+%   ab = quaternProd(a, b)
+%
+%   Calculates the quaternion product of quaternion a and b.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    ab(:,1) = a(:,1).*b(:,1)-a(:,2).*b(:,2)-a(:,3).*b(:,3)-a(:,4).*b(:,4);
+    ab(:,2) = a(:,1).*b(:,2)+a(:,2).*b(:,1)+a(:,3).*b(:,4)-a(:,4).*b(:,3);
+    ab(:,3) = a(:,1).*b(:,3)-a(:,2).*b(:,4)+a(:,3).*b(:,1)+a(:,4).*b(:,2);
+    ab(:,4) = a(:,1).*b(:,4)+a(:,2).*b(:,3)-a(:,3).*b(:,2)+a(:,4).*b(:,1);
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/quatern2euler.m
+```matlab
+function euler = quatern2euler(q)
+%QUATERN2EULER Converts a quaternion orientation to ZYX Euler angles
+%
+%   q = quatern2euler(q)
+%
+%   Converts a quaternion orientation to ZYX Euler angles where phi is a
+%   rotation around X, theta around Y and psi around Z.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    R(1,1,:) = 2.*q(:,1).^2-1+2.*q(:,2).^2;
+    R(2,1,:) = 2.*(q(:,2).*q(:,3)-q(:,1).*q(:,4));
+    R(3,1,:) = 2.*(q(:,2).*q(:,4)+q(:,1).*q(:,3));
+    R(3,2,:) = 2.*(q(:,3).*q(:,4)-q(:,1).*q(:,2));
+    R(3,3,:) = 2.*q(:,1).^2-1+2.*q(:,4).^2;
+
+    phi = atan2(R(3,2,:), R(3,3,:) );
+    theta = -atan(R(3,1,:) ./ sqrt(1-R(3,1,:).^2) );
+    psi = atan2(R(2,1,:), R(1,1,:) );
+
+    euler = [phi(1,:)' theta(1,:)' psi(1,:)'];
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/axisAngle2rotMat.m
+```matlab
+function R = axisAngle2rotMat(axis, angle)
+%AXISANGLE2ROTMAT Converts an axis-angle orientation to a rotation matrix
+%
+%   q = axisAngle2rotMat(axis, angle)
+%
+%   Converts and axis-angle orientation to a rotation matrix where a 3D
+%   rotation is described by an angular rotation around axis defined by a
+%   vector.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    kx = axis(:,1);
+    ky = axis(:,2);
+    kz = axis(:,3);
+    cT = cos(angle);
+    sT = sin(angle);
+    vT = 1 - cos(angle);
+
+    R(1,1,:) = kx.*kx.*vT + cT;
+    R(1,2,:) = kx.*ky.*vT - kz.*sT;
+    R(1,3,:) = kx.*kz.*vT + ky.*sT;
+
+    R(2,1,:) = kx.*ky.*vT + kz.*sT;
+    R(2,2,:) = ky.*ky.*vT + cT;
+    R(2,3,:) = ky.*kz.*vT - kx.*sT;
+
+    R(3,1,:) = kx.*kz.*vT - ky.*sT;
+    R(3,2,:) = ky.*kz.*vT + kx.*sT;
+    R(3,3,:) = kz.*kz.*vT + cT;
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/rotMat2quatern.m
+```matlab
+function q = rotMat2quatern(R)
+%ROTMAT2QUATERN Converts a rotation matrix orientation to a quaternion
+%
+%   q = axisAngle2quatern(axis, angle)
+%
+%   Converts a rotation matrix orientation to a quaternion.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    [row col numR] = size(R);
+    q = zeros(numR, 4);
+    K = zeros(4,4);
+    for i = 1:numR
+        K(1,1) = (1/3) * (R(1,1,i) - R(2,2,i) - R(3,3,i));
+        K(1,2) = (1/3) * (R(2,1,i) + R(1,2,i));
+        K(1,3) = (1/3) * (R(3,1,i) + R(1,3,i));
+        K(1,4) = (1/3) * (R(2,3,i) - R(3,2,i));
+        K(2,1) = (1/3) * (R(2,1,i) + R(1,2,i));
+        K(2,2) = (1/3) * (R(2,2,i) - R(1,1,i) - R(3,3,i));
+        K(2,3) = (1/3) * (R(3,2,i) + R(2,3,i));
+        K(2,4) = (1/3) * (R(3,1,i) - R(1,3,i));
+        K(3,1) = (1/3) * (R(3,1,i) + R(1,3,i));
+        K(3,2) = (1/3) * (R(3,2,i) + R(2,3,i));
+        K(3,3) = (1/3) * (R(3,3,i) - R(1,1,i) - R(2,2,i));
+        K(3,4) = (1/3) * (R(1,2,i) - R(2,1,i));
+        K(4,1) = (1/3) * (R(2,3,i) - R(3,2,i));
+        K(4,2) = (1/3) * (R(3,1,i) - R(1,3,i));
+        K(4,3) = (1/3) * (R(1,2,i) - R(2,1,i));
+        K(4,4) = (1/3) * (R(1,1,i) + R(2,2,i) + R(3,3,i));
+        [V,D] = eig(K);
+        %p = find(max(D));
+        %q = V(:,p)';
+        q(i,:) = V(:,4)';
+        q(i,:) = [q(i,4) q(i,1) q(i,2) q(i,3)];
+    end
+end
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/quatern2rotMat.m
+```matlab
+function R = quatern2rotMat(q)
+%QUATERN2ROTMAT Converts a quaternion orientation to a rotation matrix
+%
+%   R = quatern2rotMat(q)
+%
+%   Converts a quaternion orientation to a rotation matrix.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    R(1,1,:) = 2.*q(:,1).^2-1+2.*q(:,2).^2;
+    R(1,2,:) = 2.*(q(:,2).*q(:,3)+q(:,1).*q(:,4));
+    R(1,3,:) = 2.*(q(:,2).*q(:,4)-q(:,1).*q(:,3));
+    R(2,1,:) = 2.*(q(:,2).*q(:,3)-q(:,1).*q(:,4));
+    R(2,2,:) = 2.*q(:,1).^2-1+2.*q(:,3).^2;
+    R(2,3,:) = 2.*(q(:,3).*q(:,4)+q(:,1).*q(:,2));
+    R(3,1,:) = 2.*(q(:,2).*q(:,4)+q(:,1).*q(:,3));
+    R(3,2,:) = 2.*(q(:,3).*q(:,4)-q(:,1).*q(:,2));
+    R(3,3,:) = 2.*q(:,1).^2-1+2.*q(:,4).^2;
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/euler2rotMat.m
+```matlab
+function R = euler2rotMat(phi, theta, psi)
+%EULER2ROTMAT Converts a ZYX Euler angle orientation to a rotation matrix
+%
+%   q = euler2rotMat(axis, angle)
+%
+%   Converts ZYX Euler angle orientation to a rotation matrix where phi is
+%   a rotation around X, theta around Y and psi around Z.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    R(1,1,:) = cos(psi).*cos(theta);
+    R(1,2,:) = -sin(psi).*cos(phi) + cos(psi).*sin(theta).*sin(phi);
+    R(1,3,:) = sin(psi).*sin(phi) + cos(psi).*sin(theta).*cos(phi);
+
+    R(2,1,:) = sin(psi).*cos(theta);
+    R(2,2,:) = cos(psi).*cos(phi) + sin(psi).*sin(theta).*sin(phi);
+    R(2,3,:) = -cos(psi).*sin(phi) + sin(psi).*sin(theta).*cos(phi);
+
+    R(3,1,:) = -sin(theta);
+    R(3,2,:) = cos(theta).*sin(phi);
+    R(3,3,:) = cos(theta).*cos(phi);
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/axisAngle2quatern.m
+```matlab
+function q = axisAngle2quatern(axis, angle)
+%AXISANGLE2QUATERN Converts an axis-angle orientation to a quaternion
+%
+%   q = axisAngle2quatern(axis, angle)
+%
+%   Converts and axis-angle orientation to a quaternion where a 3D rotation
+%   is described by an angular rotation around axis defined by a vector.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    q0 = cos(angle./2);
+    q1 = -axis(:,1)*sin(angle./2);
+    q2 = -axis(:,2)*sin(angle./2);
+    q3 = -axis(:,3)*sin(angle./2);
+    q = [q0 q1 q2 q3];
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/quaternConj.m
+```matlab
+function qConj = quaternConj(q)
+%QUATERN2ROTMAT Converts a quaternion to its conjugate
+%
+%   qConj = quaternConj(q)
+%
+%   Converts a quaternion to its conjugate.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%	Date          Author          Notes
+%	27/09/2011    SOH Madgwick    Initial release
+
+    qConj = [q(:,1) -q(:,2) -q(:,3) -q(:,4)];
+end
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/rotMat2euler.m
+```matlab
+function euler = rotMat2euler(R)
+%ROTMAT2EULER Converts a rotation matrix orientation to ZYX Euler angles
+%
+%   euler = rotMat2euler(R)
+%
+%   Converts a rotation matrix orientation to ZYX Euler angles where phi is
+%   a rotation around X, theta around Y and psi around Z.
+%
+%   For more information see:
+%   http://www.x-io.co.uk/node/8#quaternions
+%
+%   Date          Author          Notes
+%   27/09/2011    SOH Madgwick    Initial release
+
+    phi = atan2(R(3,2,:), R(3,3,:) );
+    theta = -atan(R(3,1,:) ./ sqrt(1-R(3,1,:).^2) );
+    psi = atan2(R(2,1,:), R(1,1,:) );
+
+    euler = [phi(1,:)' theta(1,:)' psi(1,:)'];
+end
+
+
+```
+
+## File: /home/pi/Documents/GitHub/Aimvatar-IMU-Bridge/matlab/quaternion_library/TestScript.m
+```matlab
+% TestScript.m
+%
+% This script tests the quaternion library functions to ensure that each
+% function output is consistent.
+%
+% Date          Author          Notes
+% 27/09/2011    SOH Madgwick    Initial release
+
+%% Start of script
+
+close all;                          % close all figures
+clear;                              % clear all variables
+clc;                                % clear the command terminal
+
+%% Axis-angle to rotation matrix
+
+axis = [1 2 3];
+axis = axis / norm(axis);
+angle = pi/2;
+
+R = axisAngle2rotMat(axis, angle);
+num = ' % 1.5f';
+a = sprintf('\rAxis-angle to rotation matrix:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num), R(1,:));
+c = sprintf(strcat('\r', num, '\t', num, '\t', num), R(2,:));
+d = sprintf(strcat('\r', num, '\t', num, '\t', num), R(3,:));
+disp(strcat(a,b,c,d));
+
+%% Axis-angle to quaternion
+
+q = axisAngle2quatern(axis, angle);
+num = ' % 1.5f';
+a = sprintf('\rAxis-angle to quaternion:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num, '\t', num), q);
+disp(strcat(a,b));
+
+%% Quaternion to rotation matrix
+
+R = quatern2rotMat(q);
+num = ' % 1.5f';
+a = sprintf('\rQuaternion to rotation matrix:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num), R(1,:));
+c = sprintf(strcat('\r', num, '\t', num, '\t', num), R(2,:));
+d = sprintf(strcat('\r', num, '\t', num, '\t', num), R(3,:));
+disp(strcat(a,b,c,d));
+
+%% Rotation matrix to quaternion
+
+q = rotMat2quatern(R);
+num = ' % 1.5f';
+a = sprintf('\rRotation matrix to quaternion:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num, '\t', num), q);
+disp(strcat(a,b));
+
+%% Rotation matrix to ZYX Euler angles
+
+euler = rotMat2euler(R);
+num = ' % 1.5f';
+a = sprintf('\rRotation matrix to ZYX Euler angles:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num), euler);
+disp(strcat(a,b));
+
+%% Quaternion to ZYX Euler angles
+
+euler = quatern2euler(q);
+num = ' % 1.5f';
+a = sprintf('\rQuaternion to ZYX Euler angles:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num), euler);
+disp(strcat(a,b));
+
+%% ZYX Euler angles to rotation matrix
+
+R = euler2rotMat(euler(1), euler(2), euler(3));
+num = ' % 1.5f';
+a = sprintf('\rZYX Euler angles to rotation matrix:');
+b = sprintf(strcat('\r', num, '\t', num, '\t', num), R(1,:));
+c = sprintf(strcat('\r', num, '\t', num, '\t', num), R(2,:));
+d = sprintf(strcat('\r', num, '\t', num, '\t', num), R(3,:));
+disp(strcat(a,b,c,d));
+
+%% End of script
+```
+
