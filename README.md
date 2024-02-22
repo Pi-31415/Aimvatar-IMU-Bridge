@@ -3,7 +3,7 @@ A C++ reimplementation of 6 DOF Position and Orientation Tracking from a single 
 
 <!-- Compile -->
 Compile
-g++ -I ./ main.cpp -o main
+rm -f main && g++ -I ./ -I ./lib/ -std=c++11 main.cpp ./lib/MahonyAHRS.cpp -o main
 
 ### Project Structure
 
